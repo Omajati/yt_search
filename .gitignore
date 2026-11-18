@@ -3,3 +3,4 @@ __pycache__/
 *.pyc
 .env
 run.log
+output/all_videos_*.csv
