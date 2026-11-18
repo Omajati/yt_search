@@ -19,7 +19,9 @@ REQ = re.compile(r"(part ?2|part two|next|please (make|do|tell)|can you (make|do
                  r"teil ?2|bitte (mach|erzähl)|fortsetzung|nächste|mehr davon|"
                  r"what about|how about|should do|would love)", re.I)
 
+import config as C
 d = pd.read_excel(SRC, sheet_name='Все_ролики')
+d = d[d.niche.isin(list(C.NICHES))]
 d = d[(d.outlier_x >= 3) & (d.age_days >= 7) & (d.age_days <= 400) & (d.comments > 0)]
 pick = (d.sort_values('outlier_x', ascending=False).groupby(['niche', 'lang', 'channel']).head(2)
         .groupby(['niche', 'lang']).head(PER_GROUP))

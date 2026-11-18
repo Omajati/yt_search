@@ -5,11 +5,15 @@ from openpyxl.utils import get_column_letter
 
 import glob
 
+import config as C
+
+KEEP = list(C.NICHES)  # в банк попадают только активные ниши из config.py
 SRC = sorted(glob.glob('output/yt_research_*.xlsx'))[-1]  # последний прогон
 STAMP = SRC.split('_')[-1][:-5]
 OUT = f'output/bank_tem_{STAMP}.xlsx'
 
 s = pd.read_excel(SRC, sheet_name='Выдача')
+s = s[s.niche.isin(KEEP)]
 s = s.sort_values('views', ascending=False).drop_duplicates(['niche', 'lang', 'video_id'])
 a = s['lang_audio'].fillna('').str[:2]
 s = s[(a == s['lang']) | (a == '')]
@@ -183,22 +187,26 @@ COMMENTS = [
 
 COLS = ['Тема / кластер', 'Где сильна (★ = сила)', 'Примеры хитов (просмотры, подписчики канала)', 'Что работает', 'Новые углы подачи']
 summary = pd.read_excel(SRC, sheet_name='Ниши_сводка').drop(columns=['shorts_share'])
+summary = summary[summary.niche.isin(KEEP)]
 
 with pd.ExcelWriter(OUT, engine='openpyxl') as xw:
     pd.DataFrame(FAM, columns=COLS).to_excel(xw, sheet_name='Темы_семейные', index=False)
-    pd.DataFrame(PRED, columns=COLS).to_excel(xw, sheet_name='Темы_предсказания', index=False)
-    pd.DataFrame(FORMULAS, columns=['Формула названия', 'Пример', 'Где применять']).to_excel(xw, sheet_name='Формулы_названий', index=False)
-    pd.DataFrame(THUMBS, columns=['Где', 'Что на превью хитов', 'Вывод']).to_excel(xw, sheet_name='Превью', index=False)
-    pd.DataFrame(COMMENTS, columns=['Ниша', 'Что пишут зрители', 'Что делать']).to_excel(xw, sheet_name='Комментарии_инсайты', index=False)
+    if 'predictions' in KEEP:
+        pd.DataFrame(PRED, columns=COLS).to_excel(xw, sheet_name='Темы_предсказания', index=False)
+    pd.DataFrame([f for f in FORMULAS if 'predictions' in KEEP or not f[2].startswith('Предсказания')], columns=['Формула названия', 'Пример', 'Где применять']).to_excel(xw, sheet_name='Формулы_названий', index=False)
+    pd.DataFrame([t for t in THUMBS if 'predictions' in KEEP or not t[0].startswith('Предсказания')], columns=['Где', 'Что на превью хитов', 'Вывод']).to_excel(xw, sheet_name='Превью', index=False)
+    pd.DataFrame([c for c in COMMENTS if 'predictions' in KEEP or not c[0].startswith('Предсказания')], columns=['Ниша', 'Что пишут зрители', 'Что делать']).to_excel(xw, sheet_name='Комментарии_инсайты', index=False)
     cm = pd.read_csv(f'output/comments_{STAMP}.csv')
+    cm = cm[cm.niche.isin(KEEP)]
     cm = cm[cm.is_request | (cm.likes >= 50)].sort_values(['niche', 'lang', 'likes'], ascending=[True, True, False])
     cm.drop(columns=['is_request']).to_excel(xw, sheet_name='Комментарии_топ', index=False)
     summary.to_excel(xw, sheet_name='Сравнение_ниш', index=False)
     hits.to_excel(xw, sheet_name='Хиты_малых_каналов', index=False)
-    ch = pd.read_excel(SRC, sheet_name='Каналы').sort_values(['niche', 'lang', 'outliers'], ascending=[True, True, False])
+    ch = pd.read_excel(SRC, sheet_name='Каналы')
+    ch = ch[ch.niche.isin(KEEP)].sort_values(['niche', 'lang', 'outliers'], ascending=[True, True, False])
     ch.to_excel(xw, sheet_name='Конкуренты', index=False)
     d = pd.read_excel(SRC, sheet_name='Все_ролики')
-    d = d[(d.outlier_x >= 3) & (d.age_days >= 7) & (d.age_days <= 400)]
+    d = d[d.niche.isin(KEEP) & (d.outlier_x >= 3) & (d.age_days >= 7) & (d.age_days <= 400)]
     d = d.sort_values(['niche', 'lang', 'outlier_x'], ascending=[True, True, False])
     d = d[['niche', 'lang', 'title', 'outlier_x', 'views', 'channel_median', 'channel', 'duration_s',
            'published', 'url', 'thumbnail']].rename(columns={'outlier_x': 'во_сколько_раз_выше_медианы_канала'})
@@ -217,4 +225,3 @@ with pd.ExcelWriter(OUT, engine='openpyxl') as xw:
         ws.freeze_panes = 'A2'
 
 print(OUT, len(hits))
-print(hits.groupby(['niche', 'lang']).size())
